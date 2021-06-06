@@ -126,6 +126,10 @@ button {
     left: 0;
     top: 100%;
 }
+.stream:not(.focused) iframe {
+    /* prevent mousemove event from not occurring */
+    pointer-events: none;
+}
 .stream .iframe-container,
 .stream iframe {
     height: 100%;
