@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Twitch 3D</title>
+        <meta charset="utf-8">
+        <link href="https://fonts.googleapis.com/css2?family=Lato&display=swap" rel="stylesheet">
+
+        <style>
+* {
+    appearance: none;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    -ms-appearance: none;
+    box-sizing: border-box;
+    text-size-adjust: none;
+    -webkit-text-size-adjust: 100%;
+
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    background: black;
+    font-size: 16px;
+    font-family: Lato, Arial, Helvetica, sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+main {
+    width: 100%;
+    height: 100%;
+}
+
+button {
+    border: none;
+    outline: none;
+}
+
+/* Specific */
+
+.stream {
+    background: gray;
+    position: absolute;
+}
+.stream-content {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+.stream .title-bar,
+.stream .title {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2rem;
+}
+.stream .title-bar {
+    color: white;
+    background: orange;
+    position: absolute;
+}
+.stream .title-bar .title {
+    display: block;
+    line-height: 2rem;
+    text-align: center;
+    user-select: none;
+}
+.stream .title-bar button {
+    background: blue;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0);
+    width: 1rem;
+    height: 1rem;
+    display: inline-block;
+    position: absolute;
+}
+.stream .title-bar .btn-maximize {
+    top: .5rem;
+    right: 1.85rem;
+}
+.stream .title-bar .btn-close {
+    top: .5rem;
+    right: .5rem;
+}
+.stream .corner {
+    background: red;
+    width: 1.2rem;
+    height: 1.2rem;
+    position: absolute;
+    transform: translate(-50%, -50%);
+}
+.stream.maximized {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 0 !important;
+}
+.stream:not(.focused) .corner,
+.stream.maximized .corner {
+    display: none;
+}
+.stream .corner-top-left,
+.stream .corner-bottom-right {
+    cursor: nwse-resize;
+}
+.stream .corner-top-right,
+.stream .corner-bottom-left {
+    cursor: nesw-resize;
+}
+.stream .corner-top-left {
+    left: 0;
+    top: 0;
+}
+.stream .corner-top-right {
+    left: 100%;
+    top: 0;
+}
+.stream .corner-bottom-right {
+    left: 100%;
+    top: 100%;
+}
+.stream .corner-bottom-left {
+    left: 0;
+    top: 100%;
+}
+
+#context-menu {
+    display: none;
+    width: fit-content;
+    background: white;
+    position: absolute;
+    z-index: 2001;
+}
+#context-menu-content {
+    position: relative;
+}
+#context-menu-footer {
+    color: gray;
+    font-size: .8rem;
+}
+
+.modal {
+    background: rgba(255, 255, 255, 0.2);
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+}
+.modal-content {
+    background: white;
+    position: relative;
+    padding: 2rem;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: fit-content;
+}
+        </style>
+    </head>
+    <body>
+        <main>
+            <div id="streams-container">
+
+            </div>
+        </main>
+        <div id="context-menu">
+            <div id="context-menu-content">
+                <ul id="context-menu-items">
+                    <li>
+                        <button id="btn-add-stream">Add</button>
+                    </li>
+                    <li>
+                        <button id="btn-coke">Coke</button>
+                    </li>
+                    <li>
+                        <button id="btn-debug-add">(Debug)Add</button>
+                    </li>
+                </ul>
+                <div id="context-menu-footer">
+                    <p>Twitch 3D</p>
+                    <p>View on GitHub</p>
+                </div>
+            </div>
+        </div>
+        <div id="add-stream-modal" class="modal">
+            <div class="modal-content">
+                <h2>Add Stream</h2>
+                <ul id="streamer-list">
+                    <li>
+                        <input type="text" name="streamer">
+                    </li>
+                </ul>
+                <div class="frame">
+                    <button class="button button-ok">OK</button>
+                    <button class="button button-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <div id="buy-coke-modal" class="modal">
+            <div class="modal-content">
+                <h2>Buy Coke</h2>
+                <!-- PayPal intergration -->
+                <!-- KakaoPay intergration -->
+            </div>
+        </div>
+        <script>
+const streamsContainer = document.getElementById("streams-container");
+const btnDebugAdd = document.getElementById("btn-debug-add");
+
+const defaults = {
+    streamWidth: "45rem",
+    streamHeight: "30rem",
+    streamTop: "6rem",
+    streamLeft: "6rem",
+    minWdith: "9rem",
+    minHeight: "6rem"
+};
+
+const pxToRem = (px) => {
+    return px / parseFloat(getComputedStyle(document.documentElement).fontSize);
+};
+
+const remToPx = (rem) => {    
+    return rem * parseFloat(getComputedStyle(document.documentElement).fontSize);
+};
+
+const readRem = (sty) => {
+    const str = sty.replace("rem", "");
+    return parseFloat(str);
+};
+
+const addPxToRem = (sty, px) => {
+    if(px === 0) return sty;
+    const p2r = pxToRem(px);
+    const fl = readRem(sty) + p2r;
+    return `${fl}rem`;
+};
+
+const hasParent = (elem, parent) => {
+    let n = elem.parentNode;
+    while(n !== null) {
+        if(n === parent) return true;
+        n = n.parentNode;
+    }
+    return false;
+};
+
+const createElement = (tag, ...classes) => {
+    const element = document.createElement(tag);
+    element.classList.add(...classes);
+    return element;
+};
+
+const ctxMenu = document.getElementById("context-menu");
+const ctxItems = document.getElementById("context-menu-items");
+document.addEventListener("contextmenu", (ev) => {
+    ev.preventDefault();
+    ctxMenu.style.display = "block";
+    ctxMenu.style.top = `${pxToRem(mouseY - 3)}rem`;
+    ctxMenu.style.left = `${pxToRem(mouseX + 3)}rem`;
+});
+ctxItems.addEventListener("mouseup", (ev) => {
+    ctxMenu.style.display = "";
+});
+
+// Mouse tracker
+let mouseX = 0;
+let mouseY = 0;
+let mouseThrottled = false;
+const mouseHandler = (event) => {
+    if(mouseThrottled) return;
+    mouseThrottled = true;
+    mouseX = event.pageX;
+    mouseY = event.pageY;
+    setTimeout(() => {
+        mouseThrottled = false;
+    }, 16);
+};
+document.addEventListener("mousemove", mouseHandler);
+
+// Stream-related
+
+const cleanupZIndex = () => {
+    const streams = document.querySelectorAll(".stream");
+    const map = {};
+    const ary = [];
+    for(const stream of streams.values()) {
+        const zi = stream.style.zIndex;
+        map[zi] = stream;
+        ary.push(parseInt(zi));
+    }
+    ary.sort();
+    for(let i = 0; i < ary.length; i++) {
+        console.log(ary[i]);
+        map[`${ary[i]}`].style.zIndex = `${i + 1}`;
+    }
+};
+
+let focusedStream = null;
+let maximizedStream = null;
+
+const blurStream = (stream) => {
+    stream.classList.remove("focused");
+    focusedStream = null;
+};
+
+const focusStream = (stream) => {
+    if(focusedStream === stream) return;
+    let oldStream = null;
+    if(focusedStream !== null) {
+        oldStream = focusedStream;
+        blurStream(focusedStream);
+    }
+    focusedStream = stream;
+    stream.classList.add("focused");
+    stream.style.zIndex = "999";
+    if(oldStream !== null) stream.style.zIndex = `${parseInt(oldStream.style.zIndex) + 1}`;
+    cleanupZIndex();
+};
+
+const unmaximizeStream = (stream) => {
+    stream.classList.remove("maximized");
+    maximizedStream = null;
+};
+
+const maximizeStream = (stream) => {
+    if(maximizedStream === stream) {
+        unmaximizeStream(stream);
+        return;
+    } else {
+        if(maximizedStream !== null) {
+            unmaximizeStream(maximizedStream);
+        }
+        maximizedStream = stream;
+        stream.classList.add("maximized");
+    }
+    cleanupZIndex();
+};
+
+const closeStream = (stream) => {
+    stream.parentNode.removeChild(stream);
+};
+
+let moveHandler = null;
+const startMove = (stream, event) => {
+    const startX = mouseX;
+    const startY = mouseY;
+    const startTop = stream.style.top;
+    const startLeft = stream.style.left;
+    if(maximizedStream === stream) return;
+    moveHandler = setInterval(() => {
+        const dx = mouseX - startX;
+        const dy = mouseY - startY;
+        const leftLowerCap = readRem(stream.style.width) - 2;
+        const leftUpperCap = pxToRem(window.innerWidth) - 2;
+        const topUpperCap = pxToRem(window.innerHeight) - 2;
+        let newTop = addPxToRem(startTop, dy);
+        let newLeft = addPxToRem(startLeft, dx);
+        newTop = readRem(newTop) < 0 ? "0rem" : newTop;
+        newTop = readRem(newTop) > topUpperCap ? `${topUpperCap}rem` : newTop;
+        newLeft = readRem(newLeft) < (-leftLowerCap) ? `${-leftLowerCap}rem` : newLeft;
+        newLeft = readRem(newLeft) > leftUpperCap ? `${leftUpperCap}rem` : newLeft;
+        stream.style.top = newTop;
+        stream.style.left = newLeft;
+    }, 16);
+};
+let resizeHandler = null;
+const snapRatio = 16 / 9;
+const resizeSnapThreshold = 0.05;
+const startResize = (stream, tbWise, lrWise, event) => {
+    // tbWise: 1 = top, 0 = none, -1 = bottom
+    // lrWise: 1 = left, 0 = none, -1 = right
+    const startX = mouseX;
+    const startY = mouseY;
+    const startTop = stream.style.top;
+    const startLeft = stream.style.left;
+    const startHeight = stream.style.height;
+    const startWidth = stream.style.width;
+    const minWidth = defaults.minWdith;
+    const minHeight = defaults.minHeight;
+    resizeHandler = setInterval(() => {
+        const dx = mouseX - startX;
+        const dy = mouseY - startY;
+        let newHeight = addPxToRem(startHeight, dy * (-tbWise));
+        let newWidth = addPxToRem(startWidth, dx * (-lrWise));
+        let newTop = addPxToRem(startTop, dy);
+        let newLeft = addPxToRem(startLeft, dx);
+
+        let f_nw = readRem(newWidth);
+        let f_nh = readRem(newHeight);
+        const ratio = f_nw / f_nh;
+        if(ratio <= snapRatio * (1+resizeSnapThreshold) && ratio >= snapRatio * (1-resizeSnapThreshold)) {
+            f_nh = (f_nw / 16) * 9;
+            newHeight = `${f_nh}rem`;
+            newTop = `${readRem(startTop) - (f_nh - readRem(startHeight))}rem`;
+        }
+
+        if(readRem(newHeight) < readRem(minHeight)) {
+            newHeight = `${readRem(minHeight)}rem`;
+            newTop = `${readRem(startTop) + readRem(startHeight) - readRem(minHeight)}rem`;
+        }
+        if(readRem(newWidth) < readRem(minWidth)) {
+            newWidth = `${readRem(minWidth)}rem`;
+            newLeft = `${readRem(startLeft) + readRem(startWidth) - readRem(minWidth)}rem`;
+        }
+        stream.style.height = newHeight;
+        stream.style.width = newWidth;
+        if(tbWise === 1) stream.style.top = newTop;
+        if(lrWise === 1) stream.style.left = newLeft;
+    }, 16);
+};
+const stopMove = () => {
+    if(moveHandler === null) return;
+    clearInterval(moveHandler);
+    moveHandler = null;
+};
+const stopResize = () => {
+    if(resizeHandler === null) return;
+    clearInterval(resizeHandler);
+    resizeHandler = null;
+};
+
+document.addEventListener("mouseup", stopMove);
+document.addEventListener("mouseup", stopResize);
+
+const addStream = () => {
+    /*
+    div.stream
+        div.stream-content
+            div.title-bar
+                span.title
+                div.frame
+                    button.btn-maximize
+                    button.btn-close
+            div.corner.corner-top-left
+            div.corner.corner-top-right
+            div.corner.corner-bottom-right
+            div.corner.corner-bottom-left
+            div.iframe-container
+                iframe
+    */
+    const stream = createElement("div", "stream");
+    const streamContent = createElement("div", "stream-content");
+    // titleBar start
+    const titleBar = createElement("div", "title-bar");
+    const title = createElement("span", "title");
+    const titleBtnFrame = createElement("div", "frame");
+    const btnMaximize = createElement("button", "btn-maximize");
+    const btnClose = createElement("button", "btn-close");
+    btnMaximize.addEventListener("mouseup", maximizeStream.bind(null, stream));
+    btnClose.addEventListener("mouseup", closeStream.bind(null, stream));
+    title.textContent = "Title Bar";
+    btnClose.innerHTML = "&times;";
+    btnMaximize.textContent = "+";
+    title.addEventListener("dblclick", maximizeStream.bind(null, stream));
+    title.addEventListener("mousedown", startMove.bind(null, stream));
+    titleBar.appendChild(title);
+    titleBtnFrame.appendChild(btnMaximize);
+    titleBtnFrame.appendChild(btnClose);
+    titleBar.appendChild(titleBtnFrame);
+    streamContent.appendChild(titleBar);
+    // corner start
+    const cornerTopLeft = createElement("div", "corner", "corner-top-left");
+    const cornerTopRight = createElement("div", "corner", "corner-top-right");
+    const cornerBottomRight = createElement("div", "corner", "corner-bottom-right");
+    const cornerBottomLeft = createElement("div", "corner", "corner-bottom-left");
+    cornerTopLeft.addEventListener("mousedown", startResize.bind(null, stream, 1, 1));
+    cornerTopRight.addEventListener("mousedown", startResize.bind(null, stream, 1, -1));
+    cornerBottomRight.addEventListener("mousedown", startResize.bind(null, stream, -1, -1));
+    cornerBottomLeft.addEventListener("mousedown", startResize.bind(null, stream, -1, 1));
+    streamContent.appendChild(cornerTopLeft);
+    streamContent.appendChild(cornerTopRight);
+    streamContent.appendChild(cornerBottomRight);
+    streamContent.appendChild(cornerBottomLeft);
+    // iframeContainer start
+    const iframeContainer = createElement("div", "iframe-container");
+    const iframe = createElement("iframe");
+    iframe.src = "https://player.twitch.tv/?muted=false&channel=hanryang1125&parent=hjjg200.github.io";
+    iframe.allowfullscreen = "false";
+    iframeContainer.appendChild(iframe);
+    streamContent.appendChild(iframeContainer);
+
+    stream.appendChild(streamContent);
+    streamsContainer.appendChild(stream);
+    stream.style.width = defaults.streamWidth;
+    stream.style.height = defaults.streamHeight;
+    stream.style.top = defaults.streamTop;
+    stream.style.left = defaults.streamLeft;
+
+    // Focus
+    focusStream(stream);
+    stream.addEventListener("mousedown", (ev) => {
+        focusStream(stream);
+    });
+};
+
+btnDebugAdd.addEventListener("click", () => {
+    addStream();
+});
+
+        </script>
+    </body>
+</html>
