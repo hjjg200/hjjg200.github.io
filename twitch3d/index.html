@@ -38,6 +38,10 @@ button {
     outline: none;
 }
 
+iframe {
+    pointer-events: none;
+}
+
 /* Specific */
 
 .stream {
@@ -48,6 +52,23 @@ button {
     width: 100%;
     height: 100%;
     position: relative;
+}
+.stream.enable-iframe {
+    border: white 1px solid; /* visual hint */
+    transform: translate(-1px, -1px);
+}
+.stream.enable-iframe .video-overlay {
+    pointer-events: none;
+}
+.stream.enable-iframe iframe {
+    pointer-events: all;
+}
+.stream .video-overlay {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    position: absolute;
 }
 .stream .title-bar,
 .stream .title {
@@ -127,7 +148,6 @@ button {
     top: 100%;
 }
 .stream:not(.focused) iframe {
-    /* prevent mousemove event from not occurring */
     pointer-events: none;
 }
 .stream .iframe-container,
@@ -276,6 +296,11 @@ document.addEventListener("contextmenu", (ev) => {
     ctxMenu.style.top = `${pxToRem(mouseY - 3)}rem`;
     ctxMenu.style.left = `${pxToRem(mouseX + 3)}rem`;
 });
+document.addEventListener("mousedown", (ev) => {
+    if(!hasParent(ev.target, ctxMenu)) {
+        ctxMenu.style.display = "";
+    }
+});
 ctxItems.addEventListener("mouseup", (ev) => {
     ctxMenu.style.display = "";
 });
@@ -335,12 +360,25 @@ const focusStream = (stream) => {
     cleanupZIndex();
 };
 
+const disableIframeStreams = () => {
+    const streams = document.querySelectorAll(".stream.enable-iframe");
+    for(const stream of streams.values()) {
+        stream.classList.remove("enable-iframe");
+    }
+};
+
+const enableIframeStream = (stream) => {
+    disableIframeStreams();
+    stream.classList.add("enable-iframe");
+};
+
 const unmaximizeStream = (stream) => {
     stream.classList.remove("maximized");
     maximizedStream = null;
 };
 
 const maximizeStream = (stream) => {
+    disableIframeStreams();
     if(maximizedStream === stream) {
         unmaximizeStream(stream);
         return;
@@ -355,16 +393,19 @@ const maximizeStream = (stream) => {
 };
 
 const closeStream = (stream) => {
+    disableIframeStreams();
     stream.parentNode.removeChild(stream);
 };
 
 let moveHandler = null;
 const startMove = (stream, event) => {
+    disableIframeStreams();
     const startX = mouseX;
     const startY = mouseY;
     const startTop = stream.style.top;
     const startLeft = stream.style.left;
     if(maximizedStream === stream) return;
+    document.body.classList.add("during-mouse-event");
     moveHandler = setInterval(() => {
         const dx = mouseX - startX;
         const dy = mouseY - startY;
@@ -385,6 +426,7 @@ let resizeHandler = null;
 const snapRatio = 16 / 9;
 const resizeSnapThreshold = 0.05;
 const startResize = (stream, tbWise, lrWise, event) => {
+    disableIframeStreams();
     // tbWise: 1 = top, 0 = none, -1 = bottom
     // lrWise: 1 = left, 0 = none, -1 = right
     const startX = mouseX;
@@ -395,6 +437,7 @@ const startResize = (stream, tbWise, lrWise, event) => {
     const startWidth = stream.style.width;
     const minWidth = defaults.minWdith;
     const minHeight = defaults.minHeight;
+    document.body.classList.add("during-mouse-event");
     resizeHandler = setInterval(() => {
         const dx = mouseX - startX;
         const dy = mouseY - startY;
@@ -458,6 +501,13 @@ const addStream = () => {
     */
     const stream = createElement("div", "stream");
     const streamContent = createElement("div", "stream-content");
+    //
+    const videoOverlay = createElement("div", "video-overlay");
+    videoOverlay.addEventListener("mouseup", (ev) => {
+        focusStream(stream);
+        if(ev.button === 0) enableIframeStream(stream);
+    });
+    streamContent.appendChild(videoOverlay);
     // titleBar start
     const titleBar = createElement("div", "title-bar");
     const title = createElement("span", "title");
