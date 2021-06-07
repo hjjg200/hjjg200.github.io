@@ -100,7 +100,7 @@ body.still-cursor main {
 }
 .stream .title-bar {
     color: white;
-    background: orange;
+    background: rgba(144, 70, 255, 0.8);
     position: absolute;
     opacity: 1;
     transition: opacity 0.5s cubic-bezier(0.075, 0.82, 0.165, 1);
@@ -115,20 +115,26 @@ body.still-cursor main {
     user-select: none;
 }
 .stream .title-bar button {
-    background: blue;
+    background: white;
     border-radius: 50%;
-    color: rgba(255, 255, 255, 0);
-    width: 1rem;
-    height: 1rem;
+    color: rgba(0, 0, 0, 0);
+    font-size: 1rem;
+    line-height: 1;
+    overflow: hidden;
+    width: .8rem;
+    height: .8rem;
     display: inline-block;
     position: absolute;
 }
+.stream .title-bar .controls:hover button {
+    color: rgba(0, 0, 0, 0.2);
+}
 .stream .title-bar .btn-maximize {
-    top: .25rem;
-    right: 1.85rem;
+    top: .35rem;
+    right: 1.75rem;
 }
 .stream .title-bar .btn-close {
-    top: .25rem;
+    top: .35rem;
     right: .5rem;
 }
 .stream.maximized {
@@ -213,18 +219,48 @@ body.still-cursor main {
 }
 
 #context-menu {
+    border-bottom: 1px solid #777;
+    box-shadow: 0 .2rem .6rem rgba(0, 0, 0, 0.2);
     display: none;
     width: fit-content;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
     position: absolute;
     z-index: 2001;
+    overflow: hidden;
+    padding: 0;
 }
 #context-menu-content {
     position: relative;
 }
 #context-menu-footer {
-    color: gray;
+    color: #aaa;
+    font-size: .7rem;
+    padding: .2rem .6rem .3rem .6rem;
+}
+#context-menu ul {
+    list-style: none;
+}
+#context-menu ul li {
+    display: block;
+}
+#context-menu button {
+    background: none;
+    color: #555;
+    display: block;
+    width: 100%;
+    height: 100%;
+    line-height: 1rem;
     font-size: .8rem;
+    padding: .3rem 3rem .3rem .5rem;
+    text-align: left;
+}
+#context-menu button:hover {
+    background: #9146FF;
+    color: white;
+}
+body.fullscreen #btn-fullscreen,
+body:not(.fullscreen) #btn-exit-fullscreen {
+    display: none;
 }
 
 .modal {
@@ -264,10 +300,13 @@ body.still-cursor main {
             <div id="context-menu-content">
                 <ul id="context-menu-items">
                     <li>
-                        <button id="btn-add-stream">Add</button>
+                        <button id="btn-add-stream">Add Channel</button>
                     </li>
                     <li>
                         <button id="btn-fullscreen">Fullscreen</button>
+                    </li>
+                    <li>
+                        <button id="btn-exit-fullscreen">Exit Fullscreen</button>
                     </li>
                     <li>
                         <button id="btn-coke">Coke</button>
@@ -299,6 +338,15 @@ body.still-cursor main {
             </div>
         </div>
         <script>
+
+const locales = {
+    "ko": {
+        "#introduction h1": "트위치3D",
+        "#introduction p": "<b>오른쪽 마우스 버튼</b>으로 메뉴를 열어서 스트리머들을 추가해보세요!",
+        "#btn-add-stream": "채널 추가"
+    }
+};
+
 const streamsContainer = document.getElementById("streams-container");
 const btnDebugAdd = document.getElementById("btn-debug-add");
 
@@ -373,6 +421,7 @@ const modals = document.querySelectorAll(".modal");
 const addStreamModal = document.getElementById("add-stream-modal");
 const btnAddStream = document.getElementById("btn-add-stream");
 const btnFullscreen = document.getElementById("btn-fullscreen");
+const btnExitFullscreen = document.getElementById("btn-exit-fullscreen");
 document.addEventListener("contextmenu", (ev) => {
     ev.preventDefault();
     ctxMenu.style.display = "block";
@@ -400,11 +449,13 @@ btnAddStream.addEventListener("mouseup", (ev) => {
     addStreamModal.dispatchEvent(new Event("modalopen"));
 });
 btnFullscreen.addEventListener("mouseup", (ev) => {
-    document.fullscreenElement === null ? document.body.requestFullscreen() : document.exitFullscreen();
+    document.body.requestFullscreen();
+});
+btnExitFullscreen.addEventListener("mouseup", (ev) => {
+    document.exitFullscreen();
 });
 document.addEventListener("fullscreenchange", (ev) => {
-    btnFullscreen.textContent = document.fullscreenElement === null
-        ? "Fullscreen" : "Exit Fullscreen";
+    document.body.classList[document.fullscreenElement === null ? "remove" : "add"]("fullscreen");
 });
 let windowLastHeight = window.innerHeight;
 let windowLastWidth = window.innerWidth;
@@ -695,7 +746,7 @@ const addStream = (streamer, options) => {
         div.stream-content
             div.title-bar
                 span.title
-                div.frame
+                div.controls
                     button.btn-maximize
                     button.btn-close
             div.corner.corner-top-left
@@ -723,7 +774,7 @@ const addStream = (streamer, options) => {
     // titleBar start
     const titleBar = createElement("div", "title-bar");
     const title = createElement("span", "title");
-    const titleBtnFrame = createElement("div", "frame");
+    const titleControls = createElement("div", "controls");
     const btnMaximize = createElement("button", "btn-maximize");
     const btnClose = createElement("button", "btn-close");
     btnMaximize.addEventListener("mouseup", maximizeStream.bind(null, stream));
@@ -734,9 +785,9 @@ const addStream = (streamer, options) => {
     title.addEventListener("dblclick", maximizeStream.bind(null, stream));
     title.addEventListener("mousedown", startMove.bind(null, stream));
     titleBar.appendChild(title);
-    titleBtnFrame.appendChild(btnMaximize);
-    titleBtnFrame.appendChild(btnClose);
-    titleBar.appendChild(titleBtnFrame);
+    titleControls.appendChild(btnMaximize);
+    titleControls.appendChild(btnClose);
+    titleBar.appendChild(titleControls);
     streamContent.appendChild(titleBar);
     // corner start
     const cornerTopLeft = createElement("div", "corner", "corner-top-left");
