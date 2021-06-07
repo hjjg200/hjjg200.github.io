@@ -254,7 +254,6 @@ body.still-cursor main {
                 <h1>This Is Twitch3D</h1>
                 <p>Press <b>Right Mouse Button</b> to open up menu and add your favorite Twitch channels!</p>
                 <div class="frame frame-ralign">
-                    <button></button>
                 </div>
             </div>
             <div id="streams-container">
@@ -312,6 +311,8 @@ const defaults = {
     minHeight: "6rem",
     streamZIndex: "1",
     streamMaximized: false,
+    streamMinBottom: "2rem",
+    streamMinRight: "2rem"
 };
 
 const pxToRem = (px) => {
@@ -398,6 +399,32 @@ document.addEventListener("fullscreenchange", (ev) => {
     btnFullscreen.textContent = document.fullscreenElement === null
         ? "Fullscreen" : "Exit Fullscreen";
 });
+let windowResizeThrottled = false;
+const windowResizeHandler = (event) => {
+    if(windowResizeThrottled) return;
+    windowResizeThrottled = true;
+    const streams = document.querySelectorAll(".stream");
+    const wh = pxToRem(window.innerHeight);
+    const ww = pxToRem(window.innerWidth);
+    for(const stream of streams.values()) {
+        const bottom = wh - readRem(stream.style.top);
+        const right = ww - readRem(stream.style.left);
+        const minBottom = readRem(stream.getAttribute("data-min-bottom"));
+        const minRight = readRem(stream.getAttribute("data-min-right"));
+        const xy = [0, 0];
+        if(bottom < minBottom) {
+            xy[1] = -(minBottom - bottom);
+        }
+        if(right < minRight) {
+            xy[0] = -(minRight - right);
+        }
+        stream.style.transform = `translate(${xy[0]}rem, ${xy[1]}rem)`;
+    }
+    setTimeout(() => {
+        windowResizeThrottled = false;
+    }, 16);
+};
+window.addEventListener("resize", windowResizeHandler);
 
 // Mouse tracker
 let mouseX = 0;
@@ -410,15 +437,15 @@ const mouseHandler = (event) => {
     document.body.classList.remove("still-cursor");
     mouseX = event.pageX;
     mouseY = event.pageY;
-    setTimeout(() => {
-        mouseThrottled = false;
-    }, 16);
     if(mouseHideHandler !== null) {
         clearTimeout(mouseHideHandler);
     }
     mouseHideHandler = setTimeout(((x, y) => {
         if(mouseX === x && mouseY === y) document.body.classList.add("still-cursor");
     }).bind(null, mouseX, mouseY), 3000);
+    setTimeout(() => {
+        mouseThrottled = false;
+    }, 16);
 };
 document.addEventListener("mousemove", mouseHandler);
 
@@ -499,6 +526,11 @@ const closeStream = (stream) => {
     stream.parentNode.removeChild(stream);
 };
 
+const setMinBottomRight = (stream, newTop, newLeft) => {
+    stream.setAttribute("data-min-bottom", `${pxToRem(window.innerHeight) - readRem(newTop)}rem`);
+    stream.setAttribute("data-min-right", `${pxToRem(window.innerWidth) - readRem(newLeft)}rem`);
+}
+
 let moveHandlers = [];
 const startMove = (stream, event) => {
     disableIframeStreams();
@@ -522,6 +554,7 @@ const startMove = (stream, event) => {
         newLeft = readRem(newLeft) > leftUpperCap ? `${leftUpperCap}rem` : newLeft;
         stream.style.top = newTop;
         stream.style.left = newLeft;
+        setMinBottomRight(stream, newTop, newLeft);
     }, 16));
 };
 let resizeHandlers = [];
@@ -577,6 +610,7 @@ const startResize = (stream, tbWise, lrWise, event) => {
         stream.style.width = newWidth;
         if(tbWise === 1) stream.style.top = newTop;
         if(lrWise === 1) stream.style.left = newLeft;
+        setMinBottomRight(stream, newTop, newLeft);
     }, 16));
 };
 const stopMove = () => {
@@ -614,7 +648,9 @@ const updateStreamsCache = () => {
                 streamTop: stream.style.top,
                 streamLeft: stream.style.left,
                 streamZIndex: stream.style.zIndex,
-                streamMaximized: maximizedStream === stream
+                streamMaximized: maximizedStream === stream,
+                streamMinBottom: stream.getAttribute("data-min-bottom"),
+                streamMinRight: stream.getAttribute("data-min-right")
             }
         });
     }
@@ -710,6 +746,8 @@ const addStream = (streamer, options) => {
     stream.style.top = options.streamTop;
     stream.style.left = options.streamLeft;
     stream.style.zIndex = options.streamZIndex;
+    stream.setAttribute("data-min-bottom", options.streamMinBottom);
+    stream.setAttribute("data-min-right", options.streamMinRight);
 
     // Focus
     focusStream(stream);

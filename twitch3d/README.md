@@ -5,6 +5,7 @@
 - [ ] Bug where streams added are muted
 - [ ] Chat support
 - [ ] Change top,left for new windows as new windows are added
+- [x] Change position of streams when resized
 
 ## Milestones
 - [ ] New repo for this project
