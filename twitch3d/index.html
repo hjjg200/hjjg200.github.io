@@ -22,7 +22,7 @@
 html, body {
     background: black;
     font-size: 16px;
-    font-family: Lato, Arial, Helvetica, sans-serif;
+    font-family: Lato, Helvetica, Arial, sans-serif;
     overflow: hidden;
     width: 100vw;
     height: 100vh;
@@ -54,8 +54,7 @@ iframe {
     position: relative;
 }
 .stream.enable-iframe {
-    border: white 1px solid; /* visual hint */
-    transform: translate(-1px, -1px);
+    box-shadow: 0 0 0 4px rgba(92, 152, 255, 0.55); /* visual hint */
 }
 .stream.enable-iframe .video-overlay {
     pointer-events: none;
@@ -75,16 +74,21 @@ iframe {
     top: 0;
     left: 0;
     width: 100%;
-    height: 2rem;
+    height: 1.5rem;
 }
 .stream .title-bar {
     color: white;
     background: orange;
     position: absolute;
+    opacity: 1;
+    transition: opacity 0.5s cubic-bezier(0.075, 0.82, 0.165, 1);
+}
+.stream:not(.in-move):not(.in-resize) .title-bar:not(:hover) {
+    opacity: 0;
 }
 .stream .title-bar .title {
     display: block;
-    line-height: 2rem;
+    line-height: 1.5rem;
     text-align: center;
     user-select: none;
 }
@@ -98,19 +102,12 @@ iframe {
     position: absolute;
 }
 .stream .title-bar .btn-maximize {
-    top: .5rem;
+    top: .25rem;
     right: 1.85rem;
 }
 .stream .title-bar .btn-close {
-    top: .5rem;
+    top: .25rem;
     right: .5rem;
-}
-.stream .corner {
-    background: red;
-    width: 1.2rem;
-    height: 1.2rem;
-    position: absolute;
-    transform: translate(-50%, -50%);
 }
 .stream.maximized {
     top: 0 !important;
@@ -120,8 +117,43 @@ iframe {
     z-index: 0 !important;
 }
 .stream:not(.focused) .corner,
-.stream.maximized .corner {
+.stream.maximized .corner,
+.stream.in-move .corner {
     display: none;
+}
+.stream .corner {
+    width: 1.2rem;
+    height: 1.2rem;
+    position: absolute;
+    transform: translate(-50%, -50%);
+}
+.stream .corner-top,
+.stream .corner-bottom {
+    cursor: ns-resize;
+    width: calc(100% - 1.2rem);
+    height: 0.4rem;
+}
+.stream .corner-right,
+.stream .corner-left {
+    cursor: ew-resize;
+    width: 0.4rem;
+    height: calc(100% - 1.2rem);
+}
+.stream .corner-top {
+    left: 50%;
+    top: 0;
+}
+.stream .corner-right {
+    left: 100%;
+    top: 50%;
+}
+.stream .corner-bottom {
+    left: 50%;
+    top: 100%;
+}
+.stream .corner-left {
+    left: 0;
+    top: 50%;
 }
 .stream .corner-top-left,
 .stream .corner-bottom-right {
@@ -209,9 +241,6 @@ iframe {
                     <li>
                         <button id="btn-coke">Coke</button>
                     </li>
-                    <li>
-                        <button id="btn-debug-add">(Debug)Add</button>
-                    </li>
                 </ul>
                 <div id="context-menu-footer">
                     <p>Twitch 3D</p>
@@ -221,12 +250,10 @@ iframe {
         </div>
         <div id="add-stream-modal" class="modal">
             <div class="modal-content">
-                <h2>Add Stream</h2>
-                <ul id="streamer-list">
-                    <li>
-                        <input type="text" name="streamer">
-                    </li>
-                </ul>
+                <h2>Add Channel</h2>
+                <div class="frame">
+                    <input type="text">
+                </div>
                 <div class="frame">
                     <button class="button button-ok">OK</button>
                     <button class="button button-cancel">Cancel</button>
@@ -257,7 +284,7 @@ const pxToRem = (px) => {
     return px / parseFloat(getComputedStyle(document.documentElement).fontSize);
 };
 
-const remToPx = (rem) => {    
+const remToPx = (rem) => {
     return rem * parseFloat(getComputedStyle(document.documentElement).fontSize);
 };
 
@@ -282,6 +309,15 @@ const hasParent = (elem, parent) => {
     return false;
 };
 
+const hasParentSelector = (elem, selector) => {
+    let n = elem.parentNode;
+    while(n !== null && n.matches) {
+        if(n.matches(selector)) return true;
+        n = n.parentNode;
+    }
+    return false;
+};
+
 const createElement = (tag, ...classes) => {
     const element = document.createElement(tag);
     element.classList.add(...classes);
@@ -290,6 +326,9 @@ const createElement = (tag, ...classes) => {
 
 const ctxMenu = document.getElementById("context-menu");
 const ctxItems = document.getElementById("context-menu-items");
+const modals = document.querySelectorAll(".modal");
+const addStreamModal = document.getElementById("add-stream-modal");
+const btnAddStream = document.getElementById("btn-add-stream");
 document.addEventListener("contextmenu", (ev) => {
     ev.preventDefault();
     ctxMenu.style.display = "block";
@@ -301,8 +340,20 @@ document.addEventListener("mousedown", (ev) => {
         ctxMenu.style.display = "";
     }
 });
+document.addEventListener("mouseup", (ev) => {
+    const t = ev.target;
+    if(!(t.matches(".modal-content") || hasParentSelector(t, ".modal-content"))
+        && (t.matches(".modal") || hasParentSelector(t, ".modal"))) {
+        for(const modal of modals.values()) {
+            modal.style.display = "";
+        }
+    }
+});
 ctxItems.addEventListener("mouseup", (ev) => {
     ctxMenu.style.display = "";
+});
+btnAddStream.addEventListener("mouseup", (ev) => {
+    addStreamModal.dispatchEvent(new Event("modalopen"));
 });
 
 // Mouse tracker
@@ -405,7 +456,7 @@ const startMove = (stream, event) => {
     const startTop = stream.style.top;
     const startLeft = stream.style.left;
     if(maximizedStream === stream) return;
-    document.body.classList.add("during-mouse-event");
+    stream.classList.add("in-move");
     moveHandler = setInterval(() => {
         const dx = mouseX - startX;
         const dy = mouseY - startY;
@@ -437,7 +488,7 @@ const startResize = (stream, tbWise, lrWise, event) => {
     const startWidth = stream.style.width;
     const minWidth = defaults.minWdith;
     const minHeight = defaults.minHeight;
-    document.body.classList.add("during-mouse-event");
+    stream.classList.add("in-resize");
     resizeHandler = setInterval(() => {
         const dx = mouseX - startX;
         const dy = mouseY - startY;
@@ -449,7 +500,10 @@ const startResize = (stream, tbWise, lrWise, event) => {
         let f_nw = readRem(newWidth);
         let f_nh = readRem(newHeight);
         const ratio = f_nw / f_nh;
-        if(ratio <= snapRatio * (1+resizeSnapThreshold) && ratio >= snapRatio * (1-resizeSnapThreshold)) {
+        if(ratio <= snapRatio * (1+resizeSnapThreshold)
+            && ratio >= snapRatio * (1-resizeSnapThreshold)
+            && tbWise !== 0
+            && lrWise !== 0) {
             f_nh = (f_nw / 16) * 9;
             newHeight = `${f_nh}rem`;
             newTop = `${readRem(startTop) - (f_nh - readRem(startHeight))}rem`;
@@ -471,11 +525,17 @@ const startResize = (stream, tbWise, lrWise, event) => {
 };
 const stopMove = () => {
     if(moveHandler === null) return;
+    for(const stream of document.querySelectorAll(".stream.in-move").values()) {
+        stream.classList.remove("in-move");
+    }
     clearInterval(moveHandler);
     moveHandler = null;
 };
 const stopResize = () => {
     if(resizeHandler === null) return;
+    for(const stream of document.querySelectorAll(".stream.in-resize").values()) {
+        stream.classList.remove("in-resize");
+    }
     clearInterval(resizeHandler);
     resizeHandler = null;
 };
@@ -483,7 +543,7 @@ const stopResize = () => {
 document.addEventListener("mouseup", stopMove);
 document.addEventListener("mouseup", stopResize);
 
-const addStream = () => {
+const addStream = (streamer) => {
     /*
     div.stream
         div.stream-content
@@ -493,9 +553,13 @@ const addStream = () => {
                     button.btn-maximize
                     button.btn-close
             div.corner.corner-top-left
+            div.corner.corner-top
             div.corner.corner-top-right
+            div.corner.corner-right
             div.corner.corner-bottom-right
+            div.corner.corner-bottom
             div.corner.corner-bottom-left
+            div.corner.corner-left
             div.iframe-container
                 iframe
     */
@@ -516,7 +580,7 @@ const addStream = () => {
     const btnClose = createElement("button", "btn-close");
     btnMaximize.addEventListener("mouseup", maximizeStream.bind(null, stream));
     btnClose.addEventListener("mouseup", closeStream.bind(null, stream));
-    title.textContent = "Title Bar";
+    title.textContent = streamer;
     btnClose.innerHTML = "&times;";
     btnMaximize.textContent = "+";
     title.addEventListener("dblclick", maximizeStream.bind(null, stream));
@@ -528,21 +592,33 @@ const addStream = () => {
     streamContent.appendChild(titleBar);
     // corner start
     const cornerTopLeft = createElement("div", "corner", "corner-top-left");
+    const cornerTop = createElement("div", "corner", "corner-top");
     const cornerTopRight = createElement("div", "corner", "corner-top-right");
+    const cornerRight = createElement("div", "corner", "corner-right");
     const cornerBottomRight = createElement("div", "corner", "corner-bottom-right");
+    const cornerBottom = createElement("div", "corner", "corner-bottom");
     const cornerBottomLeft = createElement("div", "corner", "corner-bottom-left");
+    const cornerLeft = createElement("div", "corner", "corner-left");
     cornerTopLeft.addEventListener("mousedown", startResize.bind(null, stream, 1, 1));
+    cornerTop.addEventListener("mousedown", startResize.bind(null, stream, 1, 0));
     cornerTopRight.addEventListener("mousedown", startResize.bind(null, stream, 1, -1));
+    cornerRight.addEventListener("mousedown", startResize.bind(null, stream, 0, -1));
     cornerBottomRight.addEventListener("mousedown", startResize.bind(null, stream, -1, -1));
+    cornerBottom.addEventListener("mousedown", startResize.bind(null, stream, -1, 0));
     cornerBottomLeft.addEventListener("mousedown", startResize.bind(null, stream, -1, 1));
+    cornerLeft.addEventListener("mousedown", startResize.bind(null, stream, 0, 1));
     streamContent.appendChild(cornerTopLeft);
+    streamContent.appendChild(cornerTop);
     streamContent.appendChild(cornerTopRight);
+    streamContent.appendChild(cornerRight);
     streamContent.appendChild(cornerBottomRight);
+    streamContent.appendChild(cornerBottom);
     streamContent.appendChild(cornerBottomLeft);
+    streamContent.appendChild(cornerLeft);
     // iframeContainer start
     const iframeContainer = createElement("div", "iframe-container");
     const iframe = createElement("iframe");
-    iframe.src = "https://player.twitch.tv/?muted=false&channel=hanryang1125&parent=hjjg200.github.io";
+    iframe.src = `https://player.twitch.tv/?muted=false&channel=${streamer}&parent=${window.location.hostname}`;
     iframe.allowfullscreen = "false";
     iframeContainer.appendChild(iframe);
     streamContent.appendChild(iframeContainer);
@@ -561,9 +637,30 @@ const addStream = () => {
     });
 };
 
-btnDebugAdd.addEventListener("click", () => {
-    addStream();
-});
+{ // Add Stream Modal
+    const btnOK = addStreamModal.querySelector(".button-ok");
+    const btnCancel = addStreamModal.querySelector(".button-cancel");
+    const streamer = addStreamModal.querySelector("input[type='text']");
+    const addStreamHelper = () => {
+        if(streamer.value === "") {
+        
+            return;
+        }
+        addStream(streamer.value);
+        addStreamModal.style.display = "";
+    };
+    addStreamModal.addEventListener("modalopen", (ev) => {
+        addStreamModal.style.display = "block";
+        streamer.focus();
+    });
+    addStreamModal.addEventListener("keyup", (ev) => {
+        if(ev.key === "Enter") addStreamHelper();
+    });
+    btnOK.addEventListener("mouseup", addStreamHelper);
+    btnCancel.addEventListener("mouseup", (ev) => {
+        addStreamModal.style.display = "";
+    });
+}
 
         </script>
     </body>
