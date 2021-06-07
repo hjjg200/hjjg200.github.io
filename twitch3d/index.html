@@ -311,8 +311,8 @@ const defaults = {
     minHeight: "6rem",
     streamZIndex: "1",
     streamMaximized: false,
-    streamMinBottom: "2rem",
-    streamMinRight: "2rem"
+    streamLastBottom: "",
+    streamLastRight: ""
 };
 
 const pxToRem = (px) => {
@@ -326,6 +326,13 @@ const remToPx = (rem) => {
 const readRem = (sty) => {
     const str = sty.replace("rem", "");
     return parseFloat(str);
+};
+
+const readTranslateXY = (transform) => {
+    if(transform === "") return [0, 0];
+    const rmp = transform.slice(transform.indexOf("(") + 1, transform.indexOf(")"));
+    const xy = rmp.split(/\s*,\s*/g).map(readRem);
+    return xy;
 };
 
 const addPxToRem = (sty, px) => {
@@ -399,32 +406,35 @@ document.addEventListener("fullscreenchange", (ev) => {
     btnFullscreen.textContent = document.fullscreenElement === null
         ? "Fullscreen" : "Exit Fullscreen";
 });
-let windowResizeThrottled = false;
-const windowResizeHandler = (event) => {
-    if(windowResizeThrottled) return;
-    windowResizeThrottled = true;
-    const streams = document.querySelectorAll(".stream");
-    const wh = pxToRem(window.innerHeight);
-    const ww = pxToRem(window.innerWidth);
-    for(const stream of streams.values()) {
-        const bottom = wh - readRem(stream.style.top);
-        const right = ww - readRem(stream.style.left);
-        const minBottom = readRem(stream.getAttribute("data-min-bottom"));
-        const minRight = readRem(stream.getAttribute("data-min-right"));
-        const xy = [0, 0];
-        if(bottom < minBottom) {
-            xy[1] = -(minBottom - bottom);
+let windowLastHeight = window.innerHeight;
+let windowLastWidth = window.innerWidth;
+let windowResizeTimeout = null;
+window.addEventListener("resize", (event) => {
+    if(windowResizeTimeout !== null) clearTimeout(windowResizeTimeout);
+    windowResizeTimeout = setTimeout(() => {
+        const streams = document.querySelectorAll(".stream");
+        const wh = pxToRem(window.innerHeight);
+        const ww = pxToRem(window.innerWidth);
+        for(const stream of streams.values()) {
+            const top = readRem(stream.style.top);
+            const left = readRem(stream.style.left);
+            const bottom = wh - (readRem(stream.style.top) + readRem(stream.style.height));
+            const right = ww - (readRem(stream.style.left) + readRem(stream.style.width));
+            const lastBottom = readRem(stream.getAttribute("data-last-bottom"));
+            const lastRight = readRem(stream.getAttribute("data-last-right"));
+            const xy = [0, 0];
+            if(lastBottom < top) {
+                xy[1] = -(lastBottom - bottom);
+            }
+            if(lastRight < left) {
+                xy[0] = -(lastRight - right);
+            }
+            stream.style.transform = `translate(${xy[0]}rem, ${xy[1]}rem)`;
         }
-        if(right < minRight) {
-            xy[0] = -(minRight - right);
-        }
-        stream.style.transform = `translate(${xy[0]}rem, ${xy[1]}rem)`;
-    }
-    setTimeout(() => {
-        windowResizeThrottled = false;
-    }, 16);
-};
-window.addEventListener("resize", windowResizeHandler);
+        windowLastHeight = window.innerHeight;
+        windowLastWidth = window.innerWidth;
+    }, 100);
+});
 
 // Mouse tracker
 let mouseX = 0;
@@ -524,16 +534,28 @@ const maximizeStream = (stream) => {
 const closeStream = (stream) => {
     disableIframeStreams();
     stream.parentNode.removeChild(stream);
+    updateStreamsCache();
 };
 
-const setMinBottomRight = (stream, newTop, newLeft) => {
-    stream.setAttribute("data-min-bottom", `${pxToRem(window.innerHeight) - readRem(newTop)}rem`);
-    stream.setAttribute("data-min-right", `${pxToRem(window.innerWidth) - readRem(newLeft)}rem`);
+const setLastBottomRight = (stream) => {
+    const lb = pxToRem(window.innerHeight) - (readRem(stream.style.top) + readRem(stream.style.height));
+    const lr = pxToRem(window.innerWidth) - (readRem(stream.style.left) + readRem(stream.style.width));
+    stream.setAttribute("data-last-bottom", `${lb}rem`);
+    stream.setAttribute("data-last-right", `${lr}rem`);
 }
+
+const compensateTranslate = (stream) => {
+    const txy = readTranslateXY(stream.style.transform);
+    stream.style.transform = "";
+    console.log(txy);
+    stream.style.top = `${readRem(stream.style.top) + txy[1]}rem`;
+    stream.style.left = `${readRem(stream.style.left) + txy[0]}rem`;
+};
 
 let moveHandlers = [];
 const startMove = (stream, event) => {
     disableIframeStreams();
+    compensateTranslate(stream);
     const startX = mouseX;
     const startY = mouseY;
     const startTop = stream.style.top;
@@ -554,7 +576,7 @@ const startMove = (stream, event) => {
         newLeft = readRem(newLeft) > leftUpperCap ? `${leftUpperCap}rem` : newLeft;
         stream.style.top = newTop;
         stream.style.left = newLeft;
-        setMinBottomRight(stream, newTop, newLeft);
+        setLastBottomRight(stream);
     }, 16));
 };
 let resizeHandlers = [];
@@ -563,6 +585,7 @@ const snapGridPixel = 5;
 const resizeSnapThreshold = 0.05;
 const startResize = (stream, tbWise, lrWise, event) => {
     disableIframeStreams();
+    compensateTranslate(stream);
     // tbWise: 1 = top, 0 = none, -1 = bottom
     // lrWise: 1 = left, 0 = none, -1 = right
     const startX = mouseX;
@@ -610,7 +633,7 @@ const startResize = (stream, tbWise, lrWise, event) => {
         stream.style.width = newWidth;
         if(tbWise === 1) stream.style.top = newTop;
         if(lrWise === 1) stream.style.left = newLeft;
-        setMinBottomRight(stream, newTop, newLeft);
+        setLastBottomRight(stream);
     }, 16));
 };
 const stopMove = () => {
@@ -649,8 +672,8 @@ const updateStreamsCache = () => {
                 streamLeft: stream.style.left,
                 streamZIndex: stream.style.zIndex,
                 streamMaximized: maximizedStream === stream,
-                streamMinBottom: stream.getAttribute("data-min-bottom"),
-                streamMinRight: stream.getAttribute("data-min-right")
+                streamLastBottom: stream.getAttribute("data-last-bottom"),
+                streamLastRight: stream.getAttribute("data-last-right")
             }
         });
     }
@@ -746,8 +769,8 @@ const addStream = (streamer, options) => {
     stream.style.top = options.streamTop;
     stream.style.left = options.streamLeft;
     stream.style.zIndex = options.streamZIndex;
-    stream.setAttribute("data-min-bottom", options.streamMinBottom);
-    stream.setAttribute("data-min-right", options.streamMinRight);
+    stream.setAttribute("data-last-bottom", options.streamLastBottom);
+    stream.setAttribute("data-last-right", options.streamLastRight);
 
     // Focus
     focusStream(stream);
