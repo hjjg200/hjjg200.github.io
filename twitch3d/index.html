@@ -3,7 +3,10 @@
     <head>
         <title>Twitch 3D</title>
         <meta charset="utf-8">
-        <link href="https://fonts.googleapis.com/css2?family=Lato&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet">
+        <link href="https://hjjg200.github.io/fonts/GmarketSans/GmarketSans.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR&display=swap" rel="stylesheet">
 
         <style>
 * {
@@ -22,10 +25,14 @@
 html, body {
     background: black;
     font-size: 16px;
-    font-family: Lato, Helvetica, Arial, sans-serif;
+    font-family: Lato, Helvetica, Arial, 'Noto Sans KR', sans-serif;
     overflow: hidden;
     width: 100vw;
     height: 100vh;
+}
+
+h1, h2, h3, h4 {
+    font-family: Poppins, 'Gmarket Sans', sans-serif;
 }
 
 main {
@@ -46,6 +53,17 @@ iframe {
 
 body.still-cursor main {
     cursor: none !important;
+}
+
+#introduction {
+    color: rgb(180, 180, 180);
+    font-size: 1.2rem;
+    width: 24rem;
+    height: fit-content;
+    top: 50%;
+    left: 50%;
+    position: absolute;
+    transform: translate(-50%, -50%);
 }
 
 .stream {
@@ -232,6 +250,13 @@ body.still-cursor main {
     </head>
     <body>
         <main>
+            <div id="introduction">
+                <h1>This Is Twitch3D</h1>
+                <p>Press <b>Right Mouse Button</b> to open up menu and add your favorite Twitch channels!</p>
+                <div class="frame frame-ralign">
+                    <button></button>
+                </div>
+            </div>
             <div id="streams-container">
 
             </div>
