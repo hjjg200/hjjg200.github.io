@@ -767,7 +767,7 @@ const addStream = (streamer, options) => {
     const data = JSON.parse(localStorage.getItem("t3d-data"));
     if(data !== null) {
         for(let i = 0; i < data.length; i++) {
-            addStream(data[i].streamer, data[i].options);
+            addStream(data[i].streamer, {...defaults, ...data[i].options});
         }
     }
 }
