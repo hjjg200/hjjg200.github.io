@@ -44,6 +44,10 @@ iframe {
 
 /* Specific */
 
+body.still-cursor main {
+    cursor: none !important;
+}
+
 .stream {
     background: gray;
     position: absolute;
@@ -239,6 +243,9 @@ iframe {
                         <button id="btn-add-stream">Add</button>
                     </li>
                     <li>
+                        <button id="btn-fullscreen">Fullscreen</button>
+                    </li>
+                    <li>
                         <button id="btn-coke">Coke</button>
                     </li>
                 </ul>
@@ -329,6 +336,7 @@ const ctxItems = document.getElementById("context-menu-items");
 const modals = document.querySelectorAll(".modal");
 const addStreamModal = document.getElementById("add-stream-modal");
 const btnAddStream = document.getElementById("btn-add-stream");
+const btnFullscreen = document.getElementById("btn-fullscreen");
 document.addEventListener("contextmenu", (ev) => {
     ev.preventDefault();
     ctxMenu.style.display = "block";
@@ -355,19 +363,34 @@ ctxItems.addEventListener("mouseup", (ev) => {
 btnAddStream.addEventListener("mouseup", (ev) => {
     addStreamModal.dispatchEvent(new Event("modalopen"));
 });
+btnFullscreen.addEventListener("mouseup", (ev) => {
+    document.fullscreenElement === null ? document.body.requestFullscreen() : document.exitFullscreen();
+});
+document.addEventListener("fullscreenchange", (ev) => {
+    btnFullscreen.textContent = document.fullscreenElement === null
+        ? "Fullscreen" : "Exit Fullscreen";
+});
 
 // Mouse tracker
 let mouseX = 0;
 let mouseY = 0;
 let mouseThrottled = false;
+let mouseHideHandler = null;
 const mouseHandler = (event) => {
     if(mouseThrottled) return;
     mouseThrottled = true;
+    document.body.classList.remove("still-cursor");
     mouseX = event.pageX;
     mouseY = event.pageY;
     setTimeout(() => {
         mouseThrottled = false;
     }, 16);
+    if(mouseHideHandler !== null) {
+        clearTimeout(mouseHideHandler);
+    }
+    mouseHideHandler = setTimeout(((x, y) => {
+        if(mouseX === x && mouseY === y) document.body.classList.add("still-cursor");
+    }).bind(null, mouseX, mouseY), 3000);
 };
 document.addEventListener("mousemove", mouseHandler);
 
@@ -647,6 +670,7 @@ const addStream = (streamer) => {
             return;
         }
         addStream(streamer.value);
+        streamer.value = "";
         addStreamModal.style.display = "";
     };
     addStreamModal.addEventListener("modalopen", (ev) => {
