@@ -6,7 +6,7 @@
         <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;900&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet">
         <link href="https://hjjg200.github.io/fonts/GmarketSans/GmarketSans.css" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
 
         <style>
 * {
@@ -25,14 +25,25 @@
 html, body {
     background: black;
     font-size: 16px;
-    font-family: Lato, Helvetica, Arial, 'Noto Sans KR', sans-serif;
+    font-family: Lato, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
     overflow: hidden;
     width: 100vw;
     height: 100vh;
 }
+body.lang-ko {
+    font-family: 'Noto Sans KR', sans-serif;
+}
 
 h1, h2, h3, h4 {
-    font-family: Poppins, 'Gmarket Sans', sans-serif;
+    font-family: Poppins, sans-serif;
+}
+body.lang-ko h1,
+body.lang-ko h2,
+body.lang-ko h3,
+body.lang-ko h4 {
+    font-family: 'Gmarket Sans', sans-serif;;
+    font-weight: 400;
 }
 
 main {
@@ -56,7 +67,7 @@ body.still-cursor main {
 }
 
 #introduction {
-    color: rgb(180, 180, 180);
+    color: white;
     font-size: 1.2rem;
     width: 24rem;
     height: fit-content;
@@ -339,13 +350,27 @@ body:not(.fullscreen) #btn-exit-fullscreen {
         </div>
         <script>
 
+const lang = navigator.language.slice(0, 2);
 const locales = {
     "ko": {
         "#introduction h1": "트위치3D",
         "#introduction p": "<b>오른쪽 마우스 버튼</b>으로 메뉴를 열어서 스트리머들을 추가해보세요!",
-        "#btn-add-stream": "채널 추가"
+        "#btn-add-stream": "채널 추가",
+        "#btn-fullscreen": "전체화면",
+        "#btn-exit-fullscreen": "전체화면 나가기",
+        "#add-stream-modal h2": "채널 추가",
+        ".button-ok": "확인",
+        ".button-cancel": "취소"
     }
 };
+if(locales[lang] !== undefined) {
+    document.body.classList.add(`lang-${lang}`);
+    for(const key in locales[lang]) {
+        for(const el of document.querySelectorAll(key).values()) {
+            el.innerHTML = locales[lang][key];
+        }
+    }
+}
 
 const streamsContainer = document.getElementById("streams-container");
 const btnDebugAdd = document.getElementById("btn-debug-add");
@@ -358,9 +383,7 @@ const defaults = {
     minWdith: "9rem",
     minHeight: "6rem",
     streamZIndex: "1",
-    streamMaximized: false,
-    streamLastBottom: "",
-    streamLastRight: ""
+    streamMaximized: false
 };
 
 const pxToRem = (px) => {
@@ -829,8 +852,7 @@ const addStream = (streamer, options) => {
     stream.style.top = options.streamTop;
     stream.style.left = options.streamLeft;
     stream.style.zIndex = options.streamZIndex;
-    stream.setAttribute("data-last-bottom", options.streamLastBottom);
-    stream.setAttribute("data-last-right", options.streamLastRight);
+    setLastBottomRight(stream);
 
     // Focus
     focusStream(stream);
