@@ -108,6 +108,8 @@ body.still-cursor main {
     left: 0;
     width: 100%;
     height: 1.5rem;
+    user-select: none;
+    -webkit-user-select: none;
 }
 .stream .title-bar {
     color: white;
@@ -154,6 +156,7 @@ body.still-cursor main {
     width: 100% !important;
     height: 100% !important;
     z-index: 0 !important;
+    transform: none !important;
 }
 .stream:not(.focused) .corner,
 .stream.maximized .corner,
@@ -635,6 +638,58 @@ const compensateTranslate = (stream) => {
     stream.style.left = `${readRem(stream.style.left) + txy[0]}rem`;
 };
 
+const snapPixel = 10;
+const snapHelper = (origin, length, dest) => {
+    const dist = pxToRem(snapPixel);
+    if(origin + length >= dest - dist && origin + length <= dest + dist)
+        return [true, dest - length, dest - origin];
+    return [false];
+};
+const attemptSnap = (stream, top, left, height, width, tblr) => {
+    const nt = readRem(top);
+    const nl = readRem(left);
+    const nh = readRem(height);
+    const nw = readRem(width);
+    let bt = nt, bl = nl, bh = nh, bw = nw;
+    const wh = pxToRem(window.innerHeight);
+    const ww = pxToRem(window.innerWidth);
+
+    const tdests = [0];
+    const bdests = [wh];
+    const ldests = [0];
+    const rdests = [ww];
+    // Other streams
+    for(const rhs of document.querySelectorAll(".stream").values()) {
+        if(rhs === stream) continue;
+        const rt = readRem(rhs.style.top);
+        const rl = readRem(rhs.style.left);
+        tdests.push(rt, rt + readRem(rhs.style.height));
+        bdests.push(rt, rt + readRem(rhs.style.height));
+        ldests.push(rl, rl + readRem(rhs.style.width));
+        rdests.push(rl, rl + readRem(rhs.style.width));
+    }
+
+    const h = (origin, length, dests) => {
+        let ret = [false];
+        for(let i = 0; i < dests.length; i++) {
+            const [snapped, o, l] = snapHelper(origin, length, dests[i]);
+            if(snapped) ret = [snapped, o, l];
+        }
+        return ret;
+    };
+
+    const [tws, two, twl] = h(nt, 0, tdests);
+    if(tws) (bt = two) || tblr[0] && (bh = twl);
+    const [bws, bwo, bwl] = h(nt, nh, bdests);
+    if(bws) (bt = bwo) || tblr[1] && (bh = bwl);
+    const [lws, lwo, lwl] = h(nl, 0, ldests);
+    if(lws) (bl = lwo) || tblr[2] && (bw = lwl);
+    const [rws, rwo, rwl] = h(nl, nw, rdests);
+    if(rws) (bl = rwo) || tblr[3] && (bw = rwl);
+
+    return [`${bt}rem`, `${bl}rem`, `${bh}rem`, `${bw}rem`];
+};
+
 let moveHandlers = [];
 const startMove = (stream, event) => {
     disableIframeStreams();
@@ -657,6 +712,7 @@ const startMove = (stream, event) => {
         newTop = readRem(newTop) > topUpperCap ? `${topUpperCap}rem` : newTop;
         newLeft = readRem(newLeft) < (-leftLowerCap) ? `${-leftLowerCap}rem` : newLeft;
         newLeft = readRem(newLeft) > leftUpperCap ? `${leftUpperCap}rem` : newLeft;
+        [newTop, newLeft] = attemptSnap(stream, newTop, newLeft, stream.style.height, stream.style.width, [false, false, false, false]);
         stream.style.top = newTop;
         stream.style.left = newLeft;
         setLastBottomRight(stream);
@@ -664,7 +720,6 @@ const startMove = (stream, event) => {
 };
 let resizeHandlers = [];
 const snapRatio = 16 / 9;
-const snapGridPixel = 5;
 const resizeSnapThreshold = 0.05;
 const startResize = (stream, tbWise, lrWise, event) => {
     disableIframeStreams();
@@ -692,16 +747,16 @@ const startResize = (stream, tbWise, lrWise, event) => {
         let f_nh = readRem(newHeight);
         const ratio = f_nw / f_nh;
         if(ratio <= snapRatio * (1+resizeSnapThreshold)
-            && ratio >= snapRatio * (1-resizeSnapThreshold)
-            && tbWise !== 0
-            && lrWise !== 0) {
-            const quotient = Math.floor(remToPx(f_nw) / snapGridPixel);
-            f_nw = pxToRem(quotient * snapGridPixel);
-            newWidth = `${f_nw}rem`;
-            newLeft = `${readRem(startLeft) - (f_nw - readRem(startWidth))}rem`;
-            f_nh = (f_nw / 16) * 9;
-            newHeight = `${f_nh}rem`;
-            newTop = `${readRem(startTop) - (f_nh - readRem(startHeight))}rem`;
+            && ratio >= snapRatio * (1-resizeSnapThreshold)) {
+            if(lrWise !== 0 && tbWise === 0) {
+                f_nw = (f_nh / 9) * 16;
+                newWidth = `${f_nw}rem`;
+                newLeft = `${readRem(startLeft) - (f_nw - readRem(startWidth))}rem`;
+            } else {
+                f_nh = (f_nw / 16) * 9;
+                newHeight = `${f_nh}rem`;
+                newTop = `${readRem(startTop) - (f_nh - readRem(startHeight))}rem`;
+            }
         }
 
         if(readRem(newHeight) < readRem(minHeight)) {
@@ -712,6 +767,7 @@ const startResize = (stream, tbWise, lrWise, event) => {
             newWidth = `${readRem(minWidth)}rem`;
             newLeft = `${readRem(startLeft) + readRem(startWidth) - readRem(minWidth)}rem`;
         }
+        [newTop, newLeft, newHeight, newWidth] = attemptSnap(stream, newTop, newLeft, newHeight, newWidth, [tbWise === 1, tbWise === -1, lrWise === 1, lrWise === -1]);
         stream.style.height = newHeight;
         stream.style.width = newWidth;
         if(tbWise === 1) stream.style.top = newTop;
